@@ -1,0 +1,65 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  phone     String   @unique
+  password  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  contacts  Contact[]
+  sosEvents SosEvent[]
+}
+
+model Contact {
+  id           String   @id @default(uuid())
+  name         String
+  phone        String
+  relationship String   // FAMILY, FRIEND, COLLEAGUE, NEIGHBOUR, OTHER
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model SosEvent {
+  id          String              @id @default(uuid())
+  userId      String
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status      String              // "ACTIVE" | "CANCELLED" | "RESOLVED"
+  latitude    Float?
+  longitude   Float?
+  address     String?
+  w3wAddress  String?
+  triggeredAt DateTime            @default(now())
+  cancelledAt DateTime?
+  resolvedAt  DateTime?
+  contacts    SosContact[]
+  locationUpdates SosLocationUpdate[]
+}
+
+model SosContact {
+  id         String   @id @default(uuid())
+  sosEventId String
+  sosEvent   SosEvent @relation(fields: [sosEventId], references: [id], onDelete: Cascade)
+  name       String
+  phone      String
+}
+
+model SosLocationUpdate {
+  id         String   @id @default(uuid())
+  sosEventId String
+  sosEvent   SosEvent @relation(fields: [sosEventId], references: [id], onDelete: Cascade)
+  latitude   Float
+  longitude  Float
+  timestamp  DateTime
+}
+
