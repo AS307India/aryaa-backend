@@ -1,4 +1,4 @@
-﻿-- CreateTable
+-- CreateTable
 CREATE TABLE "User" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
@@ -78,4 +78,3 @@ ALTER TABLE "SosContact" ADD CONSTRAINT "SosContact_sosEventId_fkey" FOREIGN KEY
 
 -- AddForeignKey
 ALTER TABLE "SosLocationUpdate" ADD CONSTRAINT "SosLocationUpdate_sosEventId_fkey" FOREIGN KEY ("sosEventId") REFERENCES "SosEvent"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
