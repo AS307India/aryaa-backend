@@ -54,6 +54,20 @@ app.setSerializerCompiler(serializerCompiler);
 
 // ─── Routes ──────────────────────────────────────────────────────────────────
 
+// GET /health — unauthenticated health check / keep-alive ping.
+// Registered first and excluded from rate limiting so monitoring
+// services always get through.
+app.get('/health', {
+  config: {
+    rateLimit: false
+  }
+}, async (request, reply) => {
+  return reply.status(200).send({
+    status: 'ok',
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Honeypot routes registered first so attack-scanner paths are captured
 // before any legitimate route can accidentally match them.
 app.register(honeypotRoutes);
