@@ -23,6 +23,7 @@
     "fastify": "^4.27.0",
     "fastify-type-provider-zod": "^1.2.0",
     "jsonwebtoken": "^9.0.2",
+    "pg": "^8.22.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
