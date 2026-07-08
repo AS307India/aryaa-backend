@@ -17,6 +17,7 @@ model User {
   updatedAt DateTime @updatedAt
   contacts  Contact[]
   sosEvents SosEvent[]
+  fcmToken  String?
 }
 
 model Contact {

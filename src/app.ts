@@ -7,6 +7,7 @@ import { authRoutes } from './routes/auth.js';
 import { contactsRoutes } from './routes/contacts.js';
 import { sosRoutes } from './routes/sos.js';
 import { honeypotRoutes } from './routes/honeypot.js';
+import { userRoutes } from './routes/users.js';
 
 // Startup guard — utils/auth.ts calls process.exit(1) if JWT_SECRET is missing.
 // Importing it here ensures the guard runs before the server binds to any port.
@@ -75,6 +76,7 @@ app.register(honeypotRoutes);
 app.register(authRoutes, { prefix: '/api/auth' });
 app.register(contactsRoutes, { prefix: '/api/contacts' });
 app.register(sosRoutes, { prefix: '/api/sos' });
+app.register(userRoutes, { prefix: '/api/users' });
 
 // ─── Global error handler ────────────────────────────────────────────────────
 

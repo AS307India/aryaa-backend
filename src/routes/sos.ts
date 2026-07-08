@@ -4,6 +4,7 @@ import { prisma } from '../db/index.js';
 import { triggerSosSchema, cancelSosSchema, locationUpdateSchema } from '../schemas/sos.js';
 import { verifyToken } from '../utils/auth.js';
 import { getW3WAddress } from '../utils/w3w.js';
+import { sendSosPush } from '../utils/fcm.js';
 
 
 
@@ -109,6 +110,50 @@ export async function sosRoutes(fastify: FastifyInstance) {
         });
       }
     }
+
+    // Fetch the triggerer's name
+    const triggererUser = await prisma.user.findUnique({
+      where: { id: userId }
+    });
+    const triggererName = triggererUser?.name || 'A user';
+    const sosEventId = result.event.id;
+    const resolvedW3W = w3wAddress;
+
+    // Asynchronously dispatch FCM push notifications (do not block the HTTP response)
+    Promise.allSettled(
+      result.snapshots.map(async (contact) => {
+        const recipientUser = await prisma.user.findFirst({
+          where: {
+            phone: {
+              equals: contact.phone,
+              mode: 'insensitive'
+            }
+          }
+        });
+
+        console.log('[FCM_TRIGGER] processing contact phone:', contact.phone);
+        console.log('[FCM_TRIGGER] found user for phone:', !!recipientUser);
+        console.log('[FCM_TRIGGER] user has fcmToken:', !!recipientUser?.fcmToken);
+
+        if (recipientUser && recipientUser.fcmToken) {
+          console.log(`FCM: Found registered user for contact phone ${contact.phone}, sending push...`);
+          const success = await sendSosPush(
+            recipientUser.fcmToken,
+            triggererName,
+            triggererUser?.phone || "",
+            latitude ?? null,
+            longitude ?? null,
+            resolvedW3W,
+            sosEventId
+          );
+          console.log(`FCM push sent to ${contact.phone} success status: ${success}`);
+        } else {
+          console.log(`No FCM token for ${contact.phone}, SMS fallback needed`);
+        }
+      })
+    ).catch(err => {
+      console.error("Error dispatching FCM pushes in background:", err);
+    });
 
     return reply.status(201).send({
       sosEventId: result.event.id,
