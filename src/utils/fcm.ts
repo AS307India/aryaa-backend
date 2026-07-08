@@ -1,17 +1,29 @@
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getMessaging } from 'firebase-admin/messaging';
 
-if (getApps().length === 0) {
-  initializeApp({
-    credential: cert({
-      projectId: process.env.FIREBASE_PROJECT_ID,
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n')
-    })
-  });
+let isFcmInitialized = false;
+
+try {
+  if (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY) {
+    if (getApps().length === 0) {
+      initializeApp({
+        credential: cert({
+          projectId: process.env.FIREBASE_PROJECT_ID,
+          clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+          privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n')
+        })
+      });
+    }
+    isFcmInitialized = true;
+  } else {
+    console.warn('[FCM_INIT] Firebase Admin NOT initialized: missing environment variables');
+  }
+} catch (error: any) {
+  console.error('[FCM_INIT] Firebase Admin initialization failed:', error.message);
 }
 
 console.log('[FCM_INIT] getApps().length:', getApps().length);
+console.log('[FCM_INIT] isFcmInitialized:', isFcmInitialized);
 console.log('[FCM_INIT] project_id set:', !!process.env.FIREBASE_PROJECT_ID);
 console.log('[FCM_INIT] client_email set:', !!process.env.FIREBASE_CLIENT_EMAIL);
 console.log('[FCM_INIT] private_key set:', !!process.env.FIREBASE_PRIVATE_KEY);
@@ -27,6 +39,12 @@ export async function sendSosPush(
   sosEventId: string
 ): Promise<boolean> {
   console.log('[FCM_SEND] entering sendSosPush for token:', fcmToken?.substring(0, 20) + '...');
+  
+  if (!isFcmInitialized) {
+    console.warn('[FCM_SEND] Firebase Admin not initialized, skipping push');
+    return false;
+  }
+
   const locationString = w3wAddress 
     ? w3wAddress 
     : (lat !== null && lng !== null ? `${lat.toFixed(6)}, ${lng.toFixed(6)}` : 'unavailable');
