@@ -74,10 +74,11 @@ export async function sendSosPush(
       android: {
         priority: 'high' as const,
         notification: {
-          channelId: 'aryaa_sos_incoming',
+          channelId: 'aryaa_sos_incoming_v2',
           color: '#EF4444', // Crimson
-          sound: 'default',
-          defaultVibrateTimings: true
+          sound: 'aryaa_emergency_alert',
+          defaultVibrateTimings: false,
+          defaultLightSettings: false
         }
       }
     };
