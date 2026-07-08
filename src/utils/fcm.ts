@@ -29,6 +29,12 @@ console.log('[FCM_INIT] client_email set:', !!process.env.FIREBASE_CLIENT_EMAIL)
 console.log('[FCM_INIT] private_key set:', !!process.env.FIREBASE_PRIVATE_KEY);
 console.log('[FCM_INIT] private_key length:', process.env.FIREBASE_PRIVATE_KEY?.length || 0);
 
+function buildLocationString(lat: number | null, lng: number | null, w3wAddress: string | null): string {
+  if (w3wAddress) return `///${w3wAddress} (${lat}, ${lng})`;
+  if (lat !== null && lng !== null) return `Location: ${lat}, ${lng}`;
+  return "Location unavailable";
+}
+
 export async function sendSosPush(
   fcmToken: string,
   userName: string,
@@ -45,32 +51,33 @@ export async function sendSosPush(
     return false;
   }
 
-  const locationString = w3wAddress 
-    ? w3wAddress 
-    : (lat !== null && lng !== null ? `${lat.toFixed(6)}, ${lng.toFixed(6)}` : 'unavailable');
-
   try {
+    const timeZone = 'Asia/Kolkata';
+    const formattedTime = new Date().toLocaleTimeString('en-IN', { timeZone });
+
     const message = {
       token: fcmToken,
       notification: {
         title: `🆘 ${userName} needs help!`,
-        body: `Emergency SOS via ARYAA. Location: ${locationString}`
+        body: `${buildLocationString(lat, lng, w3wAddress)} at ${formattedTime} IST`
       },
       data: {
         sosEventId: sosEventId,
-        type: "SOS_ALERT",
+        type: 'SOS_ALERT',
         userName: userName,
-        userPhone: userPhone,
-        lat: lat !== null ? lat.toString() : "",
-        lng: lng !== null ? lng.toString() : "",
-        w3wAddress: w3wAddress || ""
+        userPhone: userPhone || '',
+        latitude: lat?.toString() ?? '',
+        longitude: lng?.toString() ?? '',
+        w3wAddress: w3wAddress ?? '',
+        triggeredAt: new Date().toISOString()
       },
       android: {
         priority: 'high' as const,
         notification: {
           channelId: 'aryaa_sos_incoming',
           color: '#EF4444', // Crimson
-          sound: 'default'
+          sound: 'default',
+          defaultVibrateTimings: true
         }
       }
     };
