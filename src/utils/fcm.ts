@@ -92,3 +92,36 @@ export async function sendSosPush(
     return false;
   }
 }
+
+export async function sendSosCancelPush(
+  fcmToken: string,
+  sosEventId: string
+): Promise<boolean> {
+  console.log('[FCM_CANCEL] entering sendSosCancelPush for token:', fcmToken?.substring(0, 20) + '...');
+
+  if (!isFcmInitialized) {
+    console.warn('[FCM_CANCEL] Firebase Admin not initialized, skipping push');
+    return false;
+  }
+
+  try {
+    const message = {
+      token: fcmToken,
+      data: {
+        sosEventId: sosEventId,
+        type: 'SOS_CANCEL'
+      },
+      android: {
+        priority: 'high' as const
+      }
+    };
+
+    console.log('[FCM_CANCEL] calling getMessaging().send()');
+    const response = await getMessaging().send(message);
+    console.log('[FCM_CANCEL] send success, messageId:', response);
+    return true;
+  } catch (error: any) {
+    console.error('[FCM_CANCEL] send failed:', error.message, error.code);
+    return false;
+  }
+}

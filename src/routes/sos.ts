@@ -4,7 +4,7 @@ import { prisma } from '../db/index.js';
 import { triggerSosSchema, cancelSosSchema, locationUpdateSchema } from '../schemas/sos.js';
 import { verifyToken } from '../utils/auth.js';
 import { getW3WAddress } from '../utils/w3w.js';
-import { sendSosPush } from '../utils/fcm.js';
+import { sendSosPush, sendSosCancelPush } from '../utils/fcm.js';
 
 
 
@@ -208,6 +208,37 @@ export async function sosRoutes(fastify: FastifyInstance) {
         status: 'CANCELLED',
         cancelledAt: new Date()
       }
+    });
+
+    // Retrieve snapshots (i.e. contacts who received the SOS)
+    const snapshots = await prisma.sosContact.findMany({
+      where: { sosEventId }
+    });
+
+    // Asynchronously dispatch FCM SOS cancel push notifications (do not block the HTTP response)
+    Promise.allSettled(
+      snapshots.map(async (contact: { name: string; phone: string }) => {
+        const recipientUser = await prisma.user.findFirst({
+          where: {
+            phone: {
+              equals: contact.phone,
+              mode: 'insensitive'
+            }
+          }
+        });
+
+        console.log('[FCM_CANCEL_TRIGGER] processing contact phone:', contact.phone);
+        console.log('[FCM_CANCEL_TRIGGER] found user for phone:', !!recipientUser);
+        console.log('[FCM_CANCEL_TRIGGER] user has fcmToken:', !!recipientUser?.fcmToken);
+
+        if (recipientUser && recipientUser.fcmToken) {
+          console.log(`FCM: Found registered user for contact phone ${contact.phone}, sending cancel push...`);
+          const success = await sendSosCancelPush(recipientUser.fcmToken, sosEventId);
+          console.log(`FCM cancel push sent to ${contact.phone} success status: ${success}`);
+        }
+      })
+    ).catch(err => {
+      console.error("Error dispatching FCM cancel pushes in background:", err);
     });
 
     return reply.status(200).send({
