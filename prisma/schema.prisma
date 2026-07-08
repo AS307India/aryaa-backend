@@ -43,6 +43,7 @@ model SosEvent {
   triggeredAt DateTime            @default(now())
   cancelledAt DateTime?
   resolvedAt  DateTime?
+  accuracy    Float?
   contacts    SosContact[]
   locationUpdates SosLocationUpdate[]
 }

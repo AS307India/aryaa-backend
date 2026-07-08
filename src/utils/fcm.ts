@@ -42,7 +42,8 @@ export async function sendSosPush(
   lat: number | null,
   lng: number | null,
   w3wAddress: string | null,
-  sosEventId: string
+  sosEventId: string,
+  accuracy: number | null
 ): Promise<boolean> {
   console.log('[FCM_SEND] entering sendSosPush for token:', fcmToken?.substring(0, 20) + '...');
   
@@ -69,7 +70,8 @@ export async function sendSosPush(
         latitude: lat?.toString() ?? '',
         longitude: lng?.toString() ?? '',
         w3wAddress: w3wAddress ?? '',
-        triggeredAt: new Date().toISOString()
+        triggeredAt: new Date().toISOString(),
+        accuracy: accuracy?.toString() ?? ''
       },
       android: {
         priority: 'high' as const,

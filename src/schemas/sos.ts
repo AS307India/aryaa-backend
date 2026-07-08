@@ -3,7 +3,8 @@ import { z } from 'zod';
 export const triggerSosSchema = z.object({
   latitude: z.number().nullable().optional(),
   longitude: z.number().nullable().optional(),
-  address: z.string().nullable().optional()
+  address: z.string().nullable().optional(),
+  accuracy: z.number().nullable().optional()
 });
 
 export type TriggerSosBody = z.infer<typeof triggerSosSchema>;

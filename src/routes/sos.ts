@@ -36,7 +36,7 @@ export async function sosRoutes(fastify: FastifyInstance) {
     }
   }, async (request, reply) => {
     const userId = (request as any).userId;
-    const { latitude, longitude, address } = request.body;
+    const { latitude, longitude, address, accuracy } = request.body;
 
     // Per-user SOS rate limit: max 10 triggers per hour.
     // DB-based so it survives server restarts and works across multiple instances.
@@ -80,7 +80,8 @@ export async function sosRoutes(fastify: FastifyInstance) {
           status: 'ACTIVE',
           latitude: latitude ?? null,
           longitude: longitude ?? null,
-          address: address ?? null
+          address: address ?? null,
+          accuracy: accuracy ?? null
         }
       });
 
@@ -144,7 +145,8 @@ export async function sosRoutes(fastify: FastifyInstance) {
             latitude ?? null,
             longitude ?? null,
             resolvedW3W,
-            sosEventId
+            sosEventId,
+            accuracy ?? null
           );
           console.log(`FCM push sent to ${contact.phone} success status: ${success}`);
         } else {
@@ -163,7 +165,8 @@ export async function sosRoutes(fastify: FastifyInstance) {
         name: s.name,
         phone: s.phone
       })),
-      w3wAddress
+      w3wAddress,
+      accuracy: result.event.accuracy
     });
 
   });
@@ -273,6 +276,7 @@ export async function sosRoutes(fastify: FastifyInstance) {
       longitude: e.longitude,
       address: e.address,
       w3wAddress: e.w3wAddress,
+      accuracy: e.accuracy,
       triggeredAt: e.triggeredAt.toISOString(),
       cancelledAt: e.cancelledAt?.toISOString() ?? null,
       contacts: e.contacts
