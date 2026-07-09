@@ -56,10 +56,11 @@ export async function deadZoneRoutes(fastify: FastifyInstance) {
 
     const now = new Date();
     const expectedBackAt = new Date(now.getTime() + durationMinutes * 60 * 1000);
-    // In non-production (local dev / debug builds), use a 1-minute grace period so test
-    // cycles complete in ~3 minutes (2min duration + 1min grace) instead of 32 minutes.
-    // Production always uses the real 30-minute grace period.
-    const gracePeriodMinutes = process.env.NODE_ENV !== 'production' ? 1 : 30;
+    // Proportional grace period: 25% of duration, clamped to [5, 30] minutes.
+    // This keeps grace proportionate — short trips get short grace, long trips
+    // cap at 30 min — eliminating the need for environment-specific overrides.
+    const rawGrace = Math.round(durationMinutes * 0.25);
+    const gracePeriodMinutes = Math.min(30, Math.max(5, rawGrace));
     const gracePeriodEnd = new Date(expectedBackAt.getTime() + gracePeriodMinutes * 60 * 1000);
 
     const checkIn = await prisma.deadZoneCheckIn.create({
