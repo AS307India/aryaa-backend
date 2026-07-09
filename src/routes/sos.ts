@@ -4,9 +4,26 @@ import { prisma } from '../db/index.js';
 import { triggerSosSchema, cancelSosSchema, locationUpdateSchema } from '../schemas/sos.js';
 import { verifyToken } from '../utils/auth.js';
 import { getW3WAddress } from '../utils/w3w.js';
-import { sendSosPush, sendSosCancelPush } from '../utils/fcm.js';
+import { sendSosPush, sendSosCancelPush, sendDuressAlertPush } from '../utils/fcm.js';
 
-
+// Clean up any stale duress events older than 2 hours dynamically
+async function autoResolveExpiredDuressEvents() {
+  const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+  try {
+    await prisma.sosEvent.updateMany({
+      where: {
+        status: 'DURESS',
+        duressTriggeredAt: { lt: twoHoursAgo }
+      },
+      data: {
+        status: 'RESOLVED',
+        resolvedAt: new Date()
+      }
+    });
+  } catch (err) {
+    console.error('[AUTO_RESOLVE] Failed to resolve stale duress events:', err);
+  }
+}
 
 // Algorithm pinned to HS512 via verifyToken() — matches signToken() in utils/auth.
 async function authenticate(request: FastifyRequest, reply: FastifyReply) {
@@ -26,7 +43,10 @@ async function authenticate(request: FastifyRequest, reply: FastifyReply) {
 export async function sosRoutes(fastify: FastifyInstance) {
   const server = fastify.withTypeProvider<ZodTypeProvider>();
 
-  // Apply authentication to all SOS endpoints
+  // Run auto-resolve and authentication as preHandlers
+  server.addHook('preHandler', async (request, reply) => {
+    await autoResolveExpiredDuressEvents();
+  });
   server.addHook('preHandler', authenticate);
 
   // POST /api/sos/trigger
@@ -55,9 +75,12 @@ export async function sosRoutes(fastify: FastifyInstance) {
       });
     }
 
-    // Check for existing ACTIVE SOS event
+    // Check for existing ACTIVE or DURESS SOS event
     const activeEvent = await prisma.sosEvent.findFirst({
-      where: { userId, status: 'ACTIVE' }
+      where: {
+        userId,
+        status: { in: ['ACTIVE', 'DURESS'] }
+      }
     });
 
     if (activeEvent) {
@@ -271,17 +294,110 @@ export async function sosRoutes(fastify: FastifyInstance) {
 
     return events.map((e) => ({
       id: e.id,
-      status: e.status,
+      status: e.status === 'DURESS' ? 'CANCELLED' : e.status,
       latitude: e.latitude,
       longitude: e.longitude,
       address: e.address,
       w3wAddress: e.w3wAddress,
       accuracy: e.accuracy,
       triggeredAt: e.triggeredAt.toISOString(),
-      cancelledAt: e.cancelledAt?.toISOString() ?? null,
+      cancelledAt: e.status === 'DURESS' ? (e.duressTriggeredAt?.toISOString() ?? null) : (e.cancelledAt?.toISOString() ?? null),
       contacts: e.contacts
     }));
 
+  });
+
+  // POST /api/sos/duress-cancel
+  server.post('/duress-cancel', {
+    schema: {
+      body: cancelSosSchema
+    }
+  }, async (request, reply) => {
+    const userId = (request as any).userId;
+    const { sosEventId } = request.body;
+
+    const event = await prisma.sosEvent.findUnique({
+      where: { id: sosEventId }
+    });
+
+    if (!event) {
+      return reply.status(404).send({
+        error: 'Not Found',
+        message: 'SOS event not found'
+      });
+    }
+
+    if (event.userId !== userId) {
+      return reply.status(403).send({
+        error: 'Forbidden',
+        message: 'You do not own this SOS event'
+      });
+    }
+
+    if (event.status !== 'ACTIVE') {
+      return reply.status(400).send({
+        error: 'Bad Request',
+        message: 'Only active SOS events can be cancelled'
+      });
+    }
+
+    // Update status to DURESS internally
+    const updatedEvent = await prisma.sosEvent.update({
+      where: { id: sosEventId },
+      data: {
+        status: 'DURESS',
+        duressTriggeredAt: new Date()
+      }
+    });
+
+    // Retrieve snapshots (i.e. contacts who received the SOS)
+    const snapshots = await prisma.sosContact.findMany({
+      where: { sosEventId }
+    });
+
+    // Fetch triggerer details
+    const triggererUser = await prisma.user.findUnique({
+      where: { id: userId }
+    });
+    const triggererName = triggererUser?.name || 'A user';
+
+    // Asynchronously dispatch quiet FCM duress push notifications (no await, no timing side channel)
+    Promise.allSettled(
+      snapshots.map(async (contact) => {
+        const recipientUser = await prisma.user.findFirst({
+          where: {
+            phone: {
+              equals: contact.phone,
+              mode: 'insensitive'
+            }
+          }
+        });
+
+        if (recipientUser && recipientUser.fcmToken) {
+          console.log(`FCM: Found registered user for contact phone ${contact.phone}, sending quiet duress push...`);
+          const success = await sendDuressAlertPush(
+            recipientUser.fcmToken,
+            triggererName,
+            triggererUser?.phone || '',
+            event.latitude,
+            event.longitude,
+            event.w3wAddress,
+            sosEventId,
+            event.accuracy
+          );
+          console.log(`FCM quiet duress push sent to ${contact.phone} success status: ${success}`);
+        }
+      })
+    ).catch(err => {
+      console.error("Error dispatching FCM duress pushes in background:", err);
+    });
+
+    // Return identical response body layout to normal cancel
+    return reply.status(200).send({
+      sosEventId: updatedEvent.id,
+      status: 'CANCELLED',
+      cancelledAt: updatedEvent.duressTriggeredAt?.toISOString()
+    });
   });
 
   // POST /api/sos/location-update

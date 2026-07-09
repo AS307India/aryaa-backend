@@ -127,3 +127,63 @@ export async function sendSosCancelPush(
     return false;
   }
 }
+
+export async function sendDuressAlertPush(
+  fcmToken: string,
+  userName: string,
+  userPhone: string,
+  lat: number | null,
+  lng: number | null,
+  w3wAddress: string | null,
+  sosEventId: string,
+  accuracy: number | null
+): Promise<boolean> {
+  console.log('[FCM_DURESS] entering sendDuressAlertPush for token:', fcmToken?.substring(0, 20) + '...');
+
+  if (!isFcmInitialized) {
+    console.warn('[FCM_DURESS] Firebase Admin not initialized, skipping push');
+    return false;
+  }
+
+  try {
+    const timeZone = 'Asia/Kolkata';
+    const formattedTime = new Date().toLocaleTimeString('en-IN', { timeZone });
+
+    const message = {
+      token: fcmToken,
+      notification: {
+        title: `⚠️ Silent Alert from ${userName}`,
+        body: `${userName} cancelled their SOS, but this may not be voluntary. Their location is still being tracked. Please check on them discreetly.`
+      },
+      data: {
+        sosEventId: sosEventId,
+        type: 'DURESS_ALERT',
+        userName: userName,
+        userPhone: userPhone || '',
+        latitude: lat?.toString() ?? '',
+        longitude: lng?.toString() ?? '',
+        w3wAddress: w3wAddress ?? '',
+        triggeredAt: new Date().toISOString(),
+        accuracy: accuracy?.toString() ?? ''
+      },
+      android: {
+        priority: 'high' as const,
+        notification: {
+          channelId: 'aryaa_duress_alert',
+          defaultSound: true,
+          defaultVibrateTimings: true,
+          defaultLightSettings: true
+        }
+      }
+    };
+
+    console.log('[FCM_DURESS] calling getMessaging().send()');
+    const response = await getMessaging().send(message);
+    console.log('[FCM_DURESS] send success, messageId:', response);
+    return true;
+  } catch (error: any) {
+    console.error('[FCM_DURESS] send failed:', error.message, error.code);
+    return false;
+  }
+}
+
