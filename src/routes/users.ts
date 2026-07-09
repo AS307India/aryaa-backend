@@ -3,6 +3,7 @@ import { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { prisma } from '../db/index.js';
 import { registerFcmTokenSchema } from '../schemas/users.js';
 import { verifyToken } from '../utils/auth.js';
+import { checkExpiredDeadZones } from '../utils/deadzone.js';
 
 async function authenticate(request: FastifyRequest, reply: FastifyReply) {
   try {
@@ -12,7 +13,13 @@ async function authenticate(request: FastifyRequest, reply: FastifyReply) {
     }
     const token = authHeader.substring(7);
     const decoded = verifyToken(token);
-    (request as any).userId = decoded.userId;
+    const userId = decoded.userId;
+    (request as any).userId = userId;
+
+    // Piggyback expired deadzone check-in scan: non-blocking
+    checkExpiredDeadZones(userId).catch(err => {
+      console.error('[DEADZONE_HOOK] Error in users check:', err.message);
+    });
   } catch (err) {
     return reply.status(401).send({ error: 'Unauthorized', message: 'Invalid or expired token' });
   }

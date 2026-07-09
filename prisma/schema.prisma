@@ -17,6 +17,7 @@ model User {
   updatedAt DateTime @updatedAt
   contacts  Contact[]
   sosEvents SosEvent[]
+  deadZoneCheckIns DeadZoneCheckIn[]
   fcmToken  String?
 }
 
@@ -64,5 +65,20 @@ model SosLocationUpdate {
   latitude   Float
   longitude  Float
   timestamp  DateTime
+}
+
+model DeadZoneCheckIn {
+  id              String    @id @default(uuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status          String    // "PENDING" | "CHECKED_IN" | "MISSED" | "ALERTED"
+  startedAt       DateTime  @default(now())
+  expectedBackAt  DateTime  // startedAt + user-selected duration
+  gracePeriodEnd  DateTime  // expectedBackAt + 30 minutes
+  checkedInAt     DateTime?
+  lastLatitude    Float?    // last known location BEFORE entering dead zone
+  lastLongitude   Float?
+  lastAccuracy    Float?
+  alertedAt       DateTime?
 }
 

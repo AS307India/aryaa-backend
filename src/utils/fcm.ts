@@ -187,3 +187,64 @@ export async function sendDuressAlertPush(
   }
 }
 
+export async function sendDeadZoneAlertPush(
+  fcmToken: string,
+  userName: string,
+  userPhone: string,
+  lat: number | null,
+  lng: number | null,
+  w3wAddress: string | null,
+  checkInId: string,
+  accuracy: number | null
+): Promise<boolean> {
+  console.log('[FCM_DEADZONE] entering sendDeadZoneAlertPush for token:', fcmToken?.substring(0, 20) + '...');
+
+  if (!isFcmInitialized) {
+    console.warn('[FCM_DEADZONE] Firebase Admin not initialized, skipping push');
+    return false;
+  }
+
+  try {
+    const locationPart = (lat !== null && lng !== null)
+      ? (w3wAddress ? `///${w3wAddress} (${lat}, ${lng})` : `${lat}, ${lng}`)
+      : 'unavailable';
+
+    const message = {
+      token: fcmToken,
+      notification: {
+        title: `⚠️ ${userName} may need help`,
+        body: `${userName} entered a no-signal area and hasn't checked in as expected. Last known location: ${locationPart}. This may be nothing, but please check on them.`
+      },
+      data: {
+        checkInId: checkInId,
+        type: 'DEADZONE_ALERT',
+        userName: userName,
+        userPhone: userPhone || '',
+        latitude: lat?.toString() ?? '',
+        longitude: lng?.toString() ?? '',
+        w3wAddress: w3wAddress ?? '',
+        triggeredAt: new Date().toISOString(),
+        accuracy: accuracy?.toString() ?? ''
+      },
+      android: {
+        priority: 'high' as const,
+        notification: {
+          channelId: 'aryaa_duress_alert', // use standard default alert channel
+          defaultSound: true,
+          defaultVibrateTimings: true,
+          defaultLightSettings: true
+        }
+      }
+    };
+
+    console.log('[FCM_DEADZONE] calling getMessaging().send()');
+    const response = await getMessaging().send(message);
+    console.log('[FCM_DEADZONE] send success, messageId:', response);
+    return true;
+  } catch (error: any) {
+    console.error('[FCM_DEADZONE] send failed:', error.message, error.code);
+    return false;
+  }
+}
+
+

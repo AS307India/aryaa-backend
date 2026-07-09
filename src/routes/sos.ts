@@ -5,6 +5,7 @@ import { triggerSosSchema, cancelSosSchema, locationUpdateSchema } from '../sche
 import { verifyToken } from '../utils/auth.js';
 import { getW3WAddress } from '../utils/w3w.js';
 import { sendSosPush, sendSosCancelPush, sendDuressAlertPush } from '../utils/fcm.js';
+import { checkExpiredDeadZones } from '../utils/deadzone.js';
 
 // Clean up any stale duress events older than 2 hours dynamically
 async function autoResolveExpiredDuressEvents() {
@@ -34,7 +35,13 @@ async function authenticate(request: FastifyRequest, reply: FastifyReply) {
     }
     const token = authHeader.substring(7);
     const decoded = verifyToken(token);
-    (request as any).userId = decoded.userId;
+    const userId = decoded.userId;
+    (request as any).userId = userId;
+
+    // Piggyback expired deadzone check-in scan: non-blocking
+    checkExpiredDeadZones(userId).catch(err => {
+      console.error('[DEADZONE_HOOK] Error in SOS check:', err.message);
+    });
   } catch (err) {
     return reply.status(401).send({ error: 'Unauthorized', message: 'Invalid or expired token' });
   }
