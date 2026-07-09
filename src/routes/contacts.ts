@@ -33,7 +33,31 @@ export async function contactsRoutes(fastify: FastifyInstance) {
       where: { userId },
       orderBy: { createdAt: 'asc' }
     });
-    return contacts;
+
+    const enrichedContacts = await Promise.all(
+      contacts.map(async (c) => {
+        const contactUser = await prisma.user.findFirst({
+          where: {
+            phone: {
+              equals: c.phone,
+              mode: 'insensitive'
+            }
+          }
+        });
+        return {
+          id: c.id,
+          name: c.name,
+          phone: c.phone,
+          relationship: c.relationship,
+          userId: c.userId,
+          createdAt: c.createdAt.toISOString(),
+          updatedAt: c.updatedAt.toISOString(),
+          hasFcmToken: !!contactUser?.fcmToken
+        };
+      })
+    );
+
+    return enrichedContacts;
   });
 
   // Add a contact (max 5)
