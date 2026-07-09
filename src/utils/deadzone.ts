@@ -3,15 +3,20 @@ import { sendDeadZoneAlertPush } from './fcm.js';
 
 export async function checkExpiredDeadZones(userId: string) {
   try {
+    const now = new Date();
+    console.log(`[DEADZONE_CHECK] checking for user: ${userId} now: ${now.toISOString()}`);
+
     const expiredCheckIn = await prisma.deadZoneCheckIn.findFirst({
       where: {
         userId,
         status: 'PENDING',
         gracePeriodEnd: {
-          lt: new Date()
+          lt: now
         }
       }
     });
+
+    console.log(`[DEADZONE_CHECK] found pending expired: ${expiredCheckIn ? 1 : 0}${expiredCheckIn ? ` (id: ${expiredCheckIn.id}, gracePeriodEnd: ${expiredCheckIn.gracePeriodEnd.toISOString()})` : ''}`);
 
     if (!expiredCheckIn) return;
 

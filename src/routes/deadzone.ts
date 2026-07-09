@@ -16,10 +16,10 @@ async function authenticate(request: FastifyRequest, reply: FastifyReply) {
     const userId = decoded.userId;
     (request as any).userId = userId;
 
-    // Run piggyback expired check scan
-    checkExpiredDeadZones(userId).catch(err => {
-      console.error('[DEADZONE_HOOK] Error in deadzone route auth hook:', err.message);
-    });
+    // IMPORTANT: await here (not fire-and-forget) so the PENDING→MISSED→ALERTED
+    // transition completes before the route handler queries the DB.
+    // Without await, GET /status races the scan and always sees PENDING.
+    await checkExpiredDeadZones(userId);
   } catch (err) {
     return reply.status(401).send({ error: 'Unauthorized', message: 'Invalid or expired token' });
   }
