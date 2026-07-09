@@ -1,17 +1,10 @@
 import { z } from 'zod';
 
-const isProduction = process.env.NODE_ENV === 'production';
-const allowedDurations = isProduction
-  ? [60, 120, 240, 480] as const
-  : [2, 60, 120, 240, 480] as const;
-
 export const startDeadZoneSchema = z.object({
-  durationMinutes: z.number().refine(
-    (val) => (allowedDurations as readonly number[]).includes(val),
-    {
-      message: `Duration must be one of: ${allowedDurations.join(', ')}`
-    }
-  ),
+  durationMinutes: z.number()
+    .int()
+    .min(1, "Minimum duration is 1 minute")
+    .max(1440, "Maximum duration is 24 hours"),
   latitude: z.number().optional().nullable(),
   longitude: z.number().optional().nullable(),
   accuracy: z.number().optional().nullable()
