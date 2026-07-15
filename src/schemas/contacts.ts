@@ -5,7 +5,10 @@ export const addContactSchema = z.object({
   phone: z.string().regex(/^(?:\+91)?[6-9]\d{9}$/, { message: 'Invalid phone format' }),
   relationship: z.enum(['FAMILY', 'FRIEND', 'COLLEAGUE', 'NEIGHBOUR', 'OTHER'], {
     errorMap: () => ({ message: 'Relationship must be FAMILY, FRIEND, COLLEAGUE, NEIGHBOUR, or OTHER' })
-  })
+  }),
+  isNearby: z.enum(['YES', 'NO', 'SOMETIMES'], {
+    errorMap: () => ({ message: 'isNearby must be YES, NO, or SOMETIMES' })
+  }).optional()
 });
 
 export type AddContactBody = z.infer<typeof addContactSchema>;

@@ -56,6 +56,7 @@ export async function contactsRoutes(fastify: FastifyInstance) {
           name: c.name,
           phone: c.phone,
           relationship: c.relationship,
+          isNearby: c.isNearby,
           userId: c.userId,
           createdAt: c.createdAt.toISOString(),
           updatedAt: c.updatedAt.toISOString(),
@@ -74,7 +75,7 @@ export async function contactsRoutes(fastify: FastifyInstance) {
     }
   }, async (request, reply) => {
     const userId = (request as any).userId;
-    const { name, phone, relationship } = request.body;
+    const { name, phone, relationship, isNearby } = request.body;
 
     // Check count limit
     const count = await prisma.contact.count({
@@ -93,6 +94,7 @@ export async function contactsRoutes(fastify: FastifyInstance) {
         name,
         phone,
         relationship,
+        isNearby: isNearby ?? 'SOMETIMES',
         userId
       }
     });

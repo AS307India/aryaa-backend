@@ -121,7 +121,8 @@ export async function sosRoutes(fastify: FastifyInstance) {
             data: {
               sosEventId: event.id,
               name: c.name,
-              phone: c.phone
+              phone: c.phone,
+              isNearby: c.isNearby
             }
           })
         )
@@ -150,9 +151,13 @@ export async function sosRoutes(fastify: FastifyInstance) {
     const sosEventId = result.event.id;
     const resolvedW3W = w3wAddress;
 
-    // Asynchronously dispatch FCM push notifications (do not block the HTTP response)
+    // Filter contacts into Local vs Non-Local responders
+    const localResponders = result.snapshots.filter((c) => c.isNearby === 'YES');
+    const nonLocalResponders = result.snapshots.filter((c) => c.isNearby !== 'YES');
+
+    // Asynchronously dispatch FCM push notifications to Local responders immediately
     Promise.allSettled(
-      result.snapshots.map(async (contact) => {
+      localResponders.map(async (contact) => {
         const recipientUser = await prisma.user.findFirst({
           where: {
             phone: {
@@ -162,12 +167,8 @@ export async function sosRoutes(fastify: FastifyInstance) {
           }
         });
 
-        console.log('[FCM_TRIGGER] processing contact phone:', contact.phone);
-        console.log('[FCM_TRIGGER] found user for phone:', !!recipientUser);
-        console.log('[FCM_TRIGGER] user has fcmToken:', !!recipientUser?.fcmToken);
-
         if (recipientUser && recipientUser.fcmToken) {
-          console.log(`FCM: Found registered user for contact phone ${contact.phone}, sending push...`);
+          console.log(`FCM: Found registered local responder for contact phone ${contact.phone}, sending push...`);
           const success = await sendSosPush(
             recipientUser.fcmToken,
             triggererName,
@@ -176,16 +177,62 @@ export async function sosRoutes(fastify: FastifyInstance) {
             longitude ?? null,
             resolvedW3W,
             sosEventId,
-            accuracy ?? null
+            accuracy ?? null,
+            'LOCAL_RESPONDER'
           );
-          console.log(`FCM push sent to ${contact.phone} success status: ${success}`);
+          console.log(`FCM local responder push sent to ${contact.phone} success status: ${success}`);
         } else {
-          console.log(`No FCM token for ${contact.phone}, SMS fallback needed`);
+          console.log(`No FCM token for local responder ${contact.phone}, SMS fallback needed`);
         }
       })
     ).catch(err => {
-      console.error("Error dispatching FCM pushes in background:", err);
+      console.error("Error dispatching Local FCM pushes in background:", err);
     });
+
+    // Schedule 30-second timer to dispatch to Non-Local responders if no response has been registered
+    setTimeout(async () => {
+      // KNOWN LIMITATION (v1): in-memory timer, lost on Render restart.
+      // Acceptable at current scale. Revisit with Redis-backed queue 
+      // (e.g. BullMQ) before scale-up or if restart frequency increases.
+      const hasResponse = await prisma.sosResponse.findFirst({ where: { sosEventId } });
+      if (!hasResponse) {
+        console.log(`No active response registered for event ${sosEventId} within 30s. Escalating to Non-Local responders...`);
+        Promise.allSettled(
+          nonLocalResponders.map(async (contact) => {
+            const recipientUser = await prisma.user.findFirst({
+              where: {
+                phone: {
+                  equals: contact.phone,
+                  mode: 'insensitive'
+                }
+              }
+            });
+
+            if (recipientUser && recipientUser.fcmToken) {
+              console.log(`FCM: Found registered non-local responder for contact phone ${contact.phone}, sending family push...`);
+              const success = await sendSosPush(
+                recipientUser.fcmToken,
+                triggererName,
+                triggererUser?.phone || "",
+                latitude ?? null,
+                longitude ?? null,
+                resolvedW3W,
+                sosEventId,
+                accuracy ?? null,
+                'FAMILY'
+              );
+              console.log(`FCM non-local responder push sent to ${contact.phone} success status: ${success}`);
+            } else {
+              console.log(`No FCM token for non-local responder ${contact.phone}, SMS fallback needed`);
+            }
+          })
+        ).catch(err => {
+          console.error("Error dispatching Non-Local FCM pushes in background:", err);
+        });
+      } else {
+        console.log(`Response registered for event ${sosEventId}. Suppressing escalation to Non-Local responders.`);
+      }
+    }, 30000);
 
     return reply.status(201).send({
       sosEventId: result.event.id,
@@ -193,7 +240,8 @@ export async function sosRoutes(fastify: FastifyInstance) {
       triggeredAt: result.event.triggeredAt.toISOString(),
       contacts: result.snapshots.map((s) => ({
         name: s.name,
-        phone: s.phone
+        phone: s.phone,
+        isNearby: s.isNearby
       })),
       w3wAddress,
       accuracy: result.event.accuracy
@@ -444,5 +492,105 @@ export async function sosRoutes(fastify: FastifyInstance) {
     });
 
     return reply.status(200).send({ success: true });
+  });
+
+  // POST /api/sos/:eventId/respond
+  server.post('/:eventId/respond', async (request, reply) => {
+    const userId = (request as any).userId;
+    const { eventId } = request.params as { eventId: string };
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId }
+    });
+    if (!user) {
+      return reply.status(404).send({ error: 'Not Found', message: 'User not found' });
+    }
+
+    const event = await prisma.sosEvent.findUnique({
+      where: { id: eventId }
+    });
+    if (!event) {
+      return reply.status(404).send({ error: 'Not Found', message: 'SOS event not found' });
+    }
+
+    // Check if response already exists
+    let response = await prisma.sosResponse.findFirst({
+      where: {
+        sosEventId: eventId,
+        phone: user.phone
+      }
+    });
+
+    if (!response) {
+      response = await prisma.sosResponse.create({
+        data: {
+          sosEventId: eventId,
+          phone: user.phone
+        }
+      });
+    }
+
+    return reply.status(200).send({
+      id: response.id,
+      sosEventId: response.sosEventId,
+      phone: response.phone,
+      respondedAt: response.respondedAt.toISOString()
+    });
+  });
+
+  // GET /api/sos/:eventId/playbook
+  server.get('/:eventId/playbook', async (request, reply) => {
+    const { eventId } = request.params as { eventId: string };
+
+    const event = await prisma.sosEvent.findUnique({
+      where: { id: eventId },
+      include: {
+        contacts: true,
+        responses: true,
+        locationUpdates: {
+          orderBy: { timestamp: 'desc' },
+          take: 1
+        }
+      }
+    });
+
+    if (!event) {
+      return reply.status(404).send({ error: 'Not Found', message: 'SOS event not found' });
+    }
+
+    // Find the victim user
+    const victim = await prisma.user.findUnique({
+      where: { id: event.userId },
+      select: { name: true, phone: true }
+    });
+
+    // Resolve details for responders
+    const responders = await Promise.all(
+      event.responses.map(async (r) => {
+        const responderUser = await prisma.user.findFirst({
+          where: { phone: r.phone }
+        });
+        return {
+          phone: r.phone,
+          name: responderUser?.name || 'Anonymous Responder',
+          respondedAt: r.respondedAt.toISOString()
+        };
+      })
+    );
+
+    const latestLocation = event.locationUpdates[0];
+
+    return reply.status(200).send({
+      id: event.id,
+      victimName: victim?.name || 'Unknown',
+      victimPhone: victim?.phone || '',
+      status: event.status,
+      latitude: latestLocation?.latitude ?? event.latitude,
+      longitude: latestLocation?.longitude ?? event.longitude,
+      w3wAddress: event.w3wAddress,
+      accuracy: event.accuracy,
+      triggeredAt: event.triggeredAt.toISOString(),
+      responders
+    });
   });
 }

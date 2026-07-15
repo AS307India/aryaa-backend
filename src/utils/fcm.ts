@@ -43,9 +43,10 @@ export async function sendSosPush(
   lng: number | null,
   w3wAddress: string | null,
   sosEventId: string,
-  accuracy: number | null
+  accuracy: number | null,
+  tier: 'LOCAL_RESPONDER' | 'FAMILY' = 'FAMILY'
 ): Promise<boolean> {
-  console.log('[FCM_SEND] entering sendSosPush for token:', fcmToken?.substring(0, 20) + '...');
+  console.log('[FCM_SEND] entering sendSosPush for token:', fcmToken?.substring(0, 20) + '...', 'tier:', tier);
   
   if (!isFcmInitialized) {
     console.warn('[FCM_SEND] Firebase Admin not initialized, skipping push');
@@ -53,16 +54,30 @@ export async function sendSosPush(
   }
 
   try {
-    const timeZone = 'Asia/Kolkata';
-    const formattedTime = new Date().toLocaleTimeString('en-IN', { timeZone });
+    const title = tier === 'LOCAL_RESPONDER'
+      ? `🚨 You're the closest person — can you go there now?`
+      : `🚨 EMERGENCY ALERT — ${userName}`;
+    
+    const body = tier === 'LOCAL_RESPONDER'
+      ? `${userName} triggered an emergency alert near you. Tap for location, playbook, and how to help.`
+      : `${userName} triggered ARYAA's emergency alert. Tap for their location and how to help.`;
 
     const message = {
       token: fcmToken,
       notification: {
-        title: `🆘 ${userName} needs help!`,
-        body: `${buildLocationString(lat, lng, w3wAddress)} at ${formattedTime} IST`
+        title,
+        body
       },
       data: {
+        action: 'com.as307.aryaa.action.OPEN_EMERGENCY_RESPONSE',
+        tier: tier,
+        eventId: sosEventId,
+        victimName: userName,
+        lat: lat?.toString() ?? '',
+        lng: lng?.toString() ?? '',
+        w3w: w3wAddress ?? '',
+        accuracy: accuracy?.toString() ?? '',
+        // Backward compatibility keys
         sosEventId: sosEventId,
         type: 'SOS_ALERT',
         userName: userName,
@@ -70,14 +85,13 @@ export async function sendSosPush(
         latitude: lat?.toString() ?? '',
         longitude: lng?.toString() ?? '',
         w3wAddress: w3wAddress ?? '',
-        triggeredAt: new Date().toISOString(),
-        accuracy: accuracy?.toString() ?? ''
+        triggeredAt: new Date().toISOString()
       },
       android: {
         priority: 'high' as const,
         notification: {
-          channelId: 'aryaa_sos_incoming_v2',
-          color: '#EF4444', // Crimson
+          channelId: 'aryaa_sos_incoming_v3',
+          color: '#FF6B1A',
           sound: 'aryaa_emergency_alert',
           defaultVibrateTimings: false,
           defaultLightSettings: false

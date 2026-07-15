@@ -26,6 +26,7 @@ model Contact {
   name         String
   phone        String
   relationship String   // FAMILY, FRIEND, COLLEAGUE, NEIGHBOUR, OTHER
+  isNearby     String   @default("SOMETIMES") // "YES" | "NO" | "SOMETIMES"
   userId       String
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt    DateTime @default(now())
@@ -48,6 +49,7 @@ model SosEvent {
   accuracy    Float?
   contacts    SosContact[]
   locationUpdates SosLocationUpdate[]
+  responses   SosResponse[]
 }
 
 model SosContact {
@@ -56,6 +58,15 @@ model SosContact {
   sosEvent   SosEvent @relation(fields: [sosEventId], references: [id], onDelete: Cascade)
   name       String
   phone      String
+  isNearby     String   @default("SOMETIMES") // Snapshot of tier at trigger time
+}
+
+model SosResponse {
+  id          String   @id @default(uuid())
+  sosEventId  String
+  sosEvent    SosEvent @relation(fields: [sosEventId], references: [id], onDelete: Cascade)
+  phone       String
+  respondedAt DateTime @default(now())
 }
 
 model SosLocationUpdate {
