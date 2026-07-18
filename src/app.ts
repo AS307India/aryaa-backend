@@ -9,6 +9,7 @@ import { sosRoutes } from './routes/sos.js';
 import { honeypotRoutes } from './routes/honeypot.js';
 import { userRoutes } from './routes/users.js';
 import { deadZoneRoutes } from './routes/deadzone.js';
+import { locationShareRoutes } from './routes/locationshare.js';
 
 // Startup guard — utils/auth.ts calls process.exit(1) if JWT_SECRET is missing.
 // Importing it here ensures the guard runs before the server binds to any port.
@@ -79,6 +80,7 @@ app.register(contactsRoutes, { prefix: '/api/contacts' });
 app.register(sosRoutes, { prefix: '/api/sos' });
 app.register(userRoutes, { prefix: '/api/users' });
 app.register(deadZoneRoutes, { prefix: '/api/deadzone' });
+app.register(locationShareRoutes, { prefix: '/api/location-share' });
 
 // ─── Global error handler ────────────────────────────────────────────────────
 

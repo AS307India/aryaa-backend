@@ -19,6 +19,7 @@ model User {
   sosEvents SosEvent[]
   deadZoneCheckIns DeadZoneCheckIn[]
   fcmToken  String?
+  locationShareSessions LocationShareSession[]
 }
 
 model Contact {
@@ -31,6 +32,7 @@ model Contact {
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  locationShareContacts LocationShareContact[]
 }
 
 model SosEvent {
@@ -91,5 +93,35 @@ model DeadZoneCheckIn {
   lastLongitude   Float?
   lastAccuracy    Float?
   alertedAt       DateTime?
+}
+
+model LocationShareSession {
+  id         String                 @id @default(uuid())
+  userId     String
+  user       User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token      String                 @unique
+  expiresAt  DateTime
+  active     Boolean                @default(true)
+  createdAt  DateTime               @default(now())
+  locations  LocationShareHistory[]
+  contacts   LocationShareContact[]
+}
+
+model LocationShareContact {
+  id         String               @id @default(uuid())
+  sessionId  String
+  session    LocationShareSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  contactId  String
+  contact    Contact              @relation(fields: [contactId], references: [id], onDelete: Cascade)
+}
+
+model LocationShareHistory {
+  id         String               @id @default(uuid())
+  sessionId  String
+  session    LocationShareSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  latitude   Float
+  longitude  Float
+  accuracy   Float?
+  timestamp  DateTime
 }
 
