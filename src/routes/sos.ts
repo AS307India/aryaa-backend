@@ -331,6 +331,67 @@ export async function sosRoutes(fastify: FastifyInstance) {
     });
   });
 
+  // GET /api/sos/active-incoming
+  server.get('/active-incoming', async (request, reply) => {
+    const userId = (request as any).userId;
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId }
+    });
+
+    if (!user) {
+      return reply.status(401).send({
+        error: 'Unauthorized',
+        message: 'User not found'
+      });
+    }
+
+    const activeEvent = await prisma.sosEvent.findFirst({
+      where: {
+        status: 'ACTIVE',
+        contacts: {
+          some: {
+            phone: {
+              equals: user.phone,
+              mode: 'insensitive'
+            }
+          }
+        }
+      },
+      include: {
+        contacts: true
+      }
+    });
+
+    if (!activeEvent) {
+      return reply.status(200).send({
+        hasActiveIncoming: false
+      });
+    }
+
+    const victim = await prisma.user.findUnique({
+      where: { id: activeEvent.userId }
+    });
+    const victimName = victim?.name || 'A user';
+
+    const responderContact = activeEvent.contacts.find(
+      (c) => c.phone.toLowerCase() === user.phone.toLowerCase()
+    );
+    const tier = responderContact?.isNearby === 'YES' ? 'LOCAL_RESPONDER' : 'FAMILY';
+
+    return reply.status(200).send({
+      hasActiveIncoming: true,
+      eventId: activeEvent.id,
+      victimName,
+      tier,
+      lat: activeEvent.latitude,
+      lng: activeEvent.longitude,
+      w3w: activeEvent.w3wAddress,
+      accuracy: activeEvent.accuracy,
+      triggeredAt: activeEvent.triggeredAt.toISOString()
+    });
+  });
+
   // GET /api/sos/history
   server.get('/history', async (request, reply) => {
     const userId = (request as any).userId;
