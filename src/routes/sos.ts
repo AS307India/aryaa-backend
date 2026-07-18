@@ -62,6 +62,7 @@ export async function sosRoutes(fastify: FastifyInstance) {
       body: triggerSosSchema
     }
   }, async (request, reply) => {
+    console.log('[TIMING_DATA] SOS trigger received at:', new Date().toISOString());
     const userId = (request as any).userId;
     const { latitude, longitude, address, accuracy } = request.body;
 
@@ -168,7 +169,7 @@ export async function sosRoutes(fastify: FastifyInstance) {
         });
 
         if (recipientUser && recipientUser.fcmToken) {
-          console.log(`FCM: Found registered local responder for contact phone ${contact.phone}, sending push...`);
+          console.log(`[TIMING_DATA] [Local-tier] Immediately before FCM dispatch to ${contact.phone} at:`, new Date().toISOString());
           const success = await sendSosPush(
             recipientUser.fcmToken,
             triggererName,
@@ -180,7 +181,7 @@ export async function sosRoutes(fastify: FastifyInstance) {
             accuracy ?? null,
             'LOCAL_RESPONDER'
           );
-          console.log(`FCM local responder push sent to ${contact.phone} success status: ${success}`);
+          console.log(`[TIMING_DATA] [Local-tier] Immediately after FCM dispatch to ${contact.phone} returned success: ${success} at:`, new Date().toISOString());
         } else {
           console.log(`No FCM token for local responder ${contact.phone}, SMS fallback needed`);
         }
@@ -191,6 +192,7 @@ export async function sosRoutes(fastify: FastifyInstance) {
 
     // Schedule 30-second timer to dispatch to Non-Local responders if no response has been registered
     setTimeout(async () => {
+      console.log('[TIMING_DATA] Entry into the 30s setTimeout callback at:', new Date().toISOString());
       // KNOWN LIMITATION (v1): in-memory timer, lost on Render restart.
       // Acceptable at current scale. Revisit with Redis-backed queue 
       // (e.g. BullMQ) before scale-up or if restart frequency increases.
@@ -209,7 +211,7 @@ export async function sosRoutes(fastify: FastifyInstance) {
             });
 
             if (recipientUser && recipientUser.fcmToken) {
-              console.log(`FCM: Found registered non-local responder for contact phone ${contact.phone}, sending family push...`);
+              console.log(`[TIMING_DATA] [Family-tier] Immediately before FCM dispatch to ${contact.phone} at:`, new Date().toISOString());
               const success = await sendSosPush(
                 recipientUser.fcmToken,
                 triggererName,
@@ -221,7 +223,7 @@ export async function sosRoutes(fastify: FastifyInstance) {
                 accuracy ?? null,
                 'FAMILY'
               );
-              console.log(`FCM non-local responder push sent to ${contact.phone} success status: ${success}`);
+              console.log(`[TIMING_DATA] [Family-tier] Immediately after FCM dispatch to ${contact.phone} returned success: ${success} at:`, new Date().toISOString());
             } else {
               console.log(`No FCM token for non-local responder ${contact.phone}, SMS fallback needed`);
             }
