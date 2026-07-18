@@ -93,6 +93,7 @@ export async function sendSosPush(
           channelId: 'aryaa_sos_incoming_v4',
           color: '#FF6B1A',
           sound: 'aryaa_emergency_alert',
+          clickAction: 'com.as307.aryaa.action.OPEN_EMERGENCY_RESPONSE',
           defaultVibrateTimings: false,
           defaultLightSettings: false
         }
