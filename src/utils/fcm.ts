@@ -90,7 +90,7 @@ export async function sendSosPush(
       android: {
         priority: 'high' as const,
         notification: {
-          channelId: 'aryaa_sos_incoming_v3',
+          channelId: 'aryaa_sos_incoming_v4',
           color: '#FF6B1A',
           sound: 'aryaa_emergency_alert',
           defaultVibrateTimings: false,
