@@ -10,6 +10,7 @@ import { honeypotRoutes } from './routes/honeypot.js';
 import { userRoutes } from './routes/users.js';
 import { deadZoneRoutes } from './routes/deadzone.js';
 import { locationShareRoutes } from './routes/locationshare.js';
+import { nearbyRoutes } from './routes/nearby.js';
 
 // Startup guard — utils/auth.ts calls process.exit(1) if JWT_SECRET is missing.
 // Importing it here ensures the guard runs before the server binds to any port.
@@ -81,6 +82,7 @@ app.register(sosRoutes, { prefix: '/api/sos' });
 app.register(userRoutes, { prefix: '/api/users' });
 app.register(deadZoneRoutes, { prefix: '/api/deadzone' });
 app.register(locationShareRoutes, { prefix: '/api/location-share' });
+app.register(nearbyRoutes, { prefix: '/api/nearby-services' });
 
 // ─── Public live-tracking HTML page ──────────────────────────────────────────
 // GET /track/:sessionId?token=<shareToken>
