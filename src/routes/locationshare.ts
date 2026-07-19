@@ -23,7 +23,7 @@ async function authenticate(request: FastifyRequest, reply: FastifyReply) {
 
 // Schemas
 const startSessionSchema = z.object({
-  durationMinutes: z.union([z.literal(30), z.literal(60), z.literal(120)]),
+  durationMinutes: z.number().int().min(5).max(480),
   contactIds: z.array(z.string())
 });
 
@@ -82,7 +82,8 @@ export async function locationShareRoutes(fastify: FastifyInstance) {
       }
     });
 
-    const shareUrl = `https://aryaa.app/track/${session.id}?token=${shareToken}`;
+    const backendBase = (process.env.PUBLIC_URL || 'https://aryaa-backend.onrender.com').replace(/\/$/, '');
+    const shareUrl = `${backendBase}/track/${session.id}?token=${shareToken}`;
 
     // Async: look up each contact's app user by phone and send FCM push
     const sharerUser = await prisma.user.findUnique({ where: { id: userId }, select: { name: true, phone: true } });

@@ -82,6 +82,91 @@ app.register(userRoutes, { prefix: '/api/users' });
 app.register(deadZoneRoutes, { prefix: '/api/deadzone' });
 app.register(locationShareRoutes, { prefix: '/api/location-share' });
 
+// ─── Public live-tracking HTML page ──────────────────────────────────────────
+// GET /track/:sessionId?token=<shareToken>
+// No auth required — renders a Leaflet map that auto-refreshes the sharer's
+// location every 10 seconds by polling /api/location-share/:sessionId/view.
+app.get('/track/:sessionId', async (request, reply) => {
+  const { sessionId } = request.params as { sessionId: string };
+  const { token } = request.query as { token: string };
+  const apiBase = (process.env.PUBLIC_URL || 'https://aryaa-backend.onrender.com').replace(/\/$/, '');
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Live Location — ARYAA</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f1117; color: #fff; }
+    #header { padding: 16px 20px; background: #1a1d27; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid #2a2d3a; }
+    #header .logo { font-size: 20px; font-weight: 700; color: #3b82f6; }
+    #header .subtitle { font-size: 13px; color: #94a3b8; }
+    #status { padding: 10px 20px; font-size: 13px; color: #94a3b8; background: #1a1d27; text-align: center; }
+    #status.active { color: #3b82f6; }
+    #status.expired { color: #ef4444; }
+    #map { width: 100%; height: calc(100vh - 110px); }
+  </style>
+</head>
+<body>
+  <div id="header">
+    <div>
+      <div class="logo">📍 ARYAA Live Location</div>
+      <div class="subtitle" id="sharerName">Loading...</div>
+    </div>
+  </div>
+  <div id="status">Fetching location...</div>
+  <div id="map"></div>
+  <script>
+    const SESSION_ID = '${sessionId}';
+    const TOKEN = '${token}';
+    const API = '${apiBase}/api/location-share/' + SESSION_ID + '/view?token=' + TOKEN;
+
+    const map = L.map('map').setView([20.5937, 78.9629], 5);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+
+    const icon = L.divIcon({ html: '📍', iconSize: [30, 30], iconAnchor: [15, 30], className: '' });
+    let marker = null;
+    let polyline = null;
+    let firstLoad = true;
+
+    async function refresh() {
+      try {
+        const res = await fetch(API);
+        if (res.status === 400) {
+          document.getElementById('status').textContent = 'Session expired or stopped.';
+          document.getElementById('status').className = 'expired';
+          return;
+        }
+        const data = await res.json();
+        document.getElementById('sharerName').textContent = (data.victimName || 'Contact') + ' • Live';
+        const locs = data.locations || [];
+        if (locs.length === 0) { document.getElementById('status').textContent = 'Waiting for first location update...'; return; }
+        const last = locs[locs.length - 1];
+        const latlng = [last.latitude, last.longitude];
+        if (marker) { marker.setLatLng(latlng); } else { marker = L.marker(latlng, { icon }).addTo(map); }
+        if (firstLoad) { map.setView(latlng, 15); firstLoad = false; }
+        if (polyline) { polyline.setLatLngs(locs.map(l => [l.latitude, l.longitude])); }
+        else { polyline = L.polyline(locs.map(l => [l.latitude, l.longitude]), { color: '#3b82f6', weight: 3 }).addTo(map); }
+        const ts = new Date(last.timestamp).toLocaleTimeString();
+        document.getElementById('status').textContent = 'Last updated: ' + ts;
+        document.getElementById('status').className = 'active';
+      } catch(e) { document.getElementById('status').textContent = 'Network error. Retrying...'; }
+    }
+    refresh();
+    setInterval(refresh, 10000);
+  </script>
+</body>
+</html>`;
+
+  return reply.type('text/html').send(html);
+});
+
 // ─── Global error handler ────────────────────────────────────────────────────
 
 app.setErrorHandler((error, request, reply) => {
