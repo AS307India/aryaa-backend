@@ -1,5 +1,6 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { ZodTypeProvider } from 'fastify-type-provider-zod';
+import crypto from 'crypto';
 import { prisma } from '../db/index.js';
 import { triggerSosSchema, cancelSosSchema, locationUpdateSchema } from '../schemas/sos.js';
 import { verifyToken } from '../utils/auth.js';
@@ -109,6 +110,7 @@ export async function sosRoutes(fastify: FastifyInstance) {
         data: {
           userId,
           status: 'ACTIVE',
+          publicTrackToken: crypto.randomUUID(),
           latitude: latitude ?? null,
           longitude: longitude ?? null,
           address: address ?? null,
@@ -236,9 +238,13 @@ export async function sosRoutes(fastify: FastifyInstance) {
       }
     }, 30000);
 
+    const backendBase = (process.env.PUBLIC_URL || 'https://aryaa-backend.onrender.com').replace(/\/$/, '');
+    const publicTrackUrl = `${backendBase}/track/sos/${result.event.id}?token=${result.event.publicTrackToken}`;
+
     return reply.status(201).send({
       sosEventId: result.event.id,
       status: result.event.status,
+      publicTrackUrl,
       triggeredAt: result.event.triggeredAt.toISOString(),
       contacts: result.snapshots.map((s) => ({
         name: s.name,
@@ -642,12 +648,17 @@ export async function sosRoutes(fastify: FastifyInstance) {
     );
 
     const latestLocation = event.locationUpdates[0];
+    const backendBase = (process.env.PUBLIC_URL || 'https://aryaa-backend.onrender.com').replace(/\/$/, '');
+    const publicTrackUrl = event.publicTrackToken
+      ? `${backendBase}/track/sos/${event.id}?token=${event.publicTrackToken}`
+      : null;
 
     return reply.status(200).send({
       id: event.id,
       victimName: victim?.name || 'Unknown',
       victimPhone: victim?.phone || '',
       status: event.status,
+      publicTrackUrl,
       latitude: latestLocation?.latitude ?? event.latitude,
       longitude: latestLocation?.longitude ?? event.longitude,
       w3wAddress: event.w3wAddress,

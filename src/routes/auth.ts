@@ -53,6 +53,17 @@ export async function authRoutes(fastify: FastifyInstance) {
       });
     }
 
+    // Block registration of the admin-reserved email address.
+    // This prevents a claim-and-escalate attack if ADMIN_EMAIL is
+    // not configured in the deployment environment.
+    const reservedAdminEmail = process.env.ADMIN_EMAIL;
+    if (reservedAdminEmail && email.toLowerCase() === reservedAdminEmail.toLowerCase()) {
+      return reply.status(403).send({
+        error: 'Forbidden',
+        message: 'This email address cannot be used for registration.'
+      });
+    }
+
     // Hash password
     const hashedPassword = await hashPassword(password);
 

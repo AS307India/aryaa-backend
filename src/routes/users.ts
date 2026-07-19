@@ -1,7 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { prisma } from '../db/index.js';
-import { registerFcmTokenSchema } from '../schemas/users.js';
+import { registerFcmTokenSchema, updateProfileAddressSchema } from '../schemas/users.js';
 import { verifyToken } from '../utils/auth.js';
 import { checkExpiredDeadZones } from '../utils/deadzone.js';
 
@@ -43,6 +43,27 @@ export async function userRoutes(fastify: FastifyInstance) {
     await prisma.user.update({
       where: { id: userId },
       data: { fcmToken }
+    });
+
+    return reply.status(200).send({ success: true });
+  });
+
+  // POST /profile-address
+  server.post('/profile-address', {
+    schema: {
+      body: updateProfileAddressSchema
+    }
+  }, async (request, reply) => {
+    const userId = (request as any).userId;
+    const { homeAddress, homeLatitude, homeLongitude } = request.body;
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        homeAddress: homeAddress ?? null,
+        homeLatitude: homeLatitude ?? null,
+        homeLongitude: homeLongitude ?? null
+      }
     });
 
     return reply.status(200).send({ success: true });

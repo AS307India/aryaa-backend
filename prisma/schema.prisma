@@ -8,18 +8,22 @@ generator client {
 }
 
 model User {
-  id        String   @id @default(uuid())
-  name      String
-  email     String   @unique
-  phone     String   @unique
-  password  String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  contacts  Contact[]
-  sosEvents SosEvent[]
-  deadZoneCheckIns DeadZoneCheckIn[]
-  fcmToken  String?
+  id                    String                 @id @default(uuid())
+  name                  String
+  email                 String                 @unique
+  phone                 String                 @unique
+  password              String
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  contacts              Contact[]
+  sosEvents             SosEvent[]
+  deadZoneCheckIns      DeadZoneCheckIn[]
+  fcmToken              String?
   locationShareSessions LocationShareSession[]
+  homeAddress           String?
+  homeLatitude          Float?
+  homeLongitude         Float?
+  safetyReports         SafetyReport[]
 }
 
 model Contact {
@@ -36,22 +40,23 @@ model Contact {
 }
 
 model SosEvent {
-  id          String              @id @default(uuid())
-  userId      String
-  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  status      String              // "ACTIVE" | "CANCELLED" | "RESOLVED"
-  latitude    Float?
-  longitude   Float?
-  address     String?
-  w3wAddress  String?
-  triggeredAt DateTime            @default(now())
-  cancelledAt DateTime?
-  resolvedAt  DateTime?
+  id                String              @id @default(uuid())
+  userId            String
+  user              User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status            String              // "ACTIVE" | "CANCELLED" | "RESOLVED" | "DURESS"
+  publicTrackToken  String?             @unique
+  latitude          Float?
+  longitude         Float?
+  address           String?
+  w3wAddress        String?
+  triggeredAt       DateTime            @default(now())
+  cancelledAt       DateTime?
+  resolvedAt        DateTime?
   duressTriggeredAt DateTime?
-  accuracy    Float?
-  contacts    SosContact[]
-  locationUpdates SosLocationUpdate[]
-  responses   SosResponse[]
+  accuracy          Float?
+  contacts          SosContact[]
+  locationUpdates   SosLocationUpdate[]
+  responses         SosResponse[]
 }
 
 model SosContact {
@@ -81,18 +86,22 @@ model SosLocationUpdate {
 }
 
 model DeadZoneCheckIn {
-  id              String    @id @default(uuid())
-  userId          String
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  status          String    // "PENDING" | "CHECKED_IN" | "MISSED" | "ALERTED"
-  startedAt       DateTime  @default(now())
-  expectedBackAt  DateTime  // startedAt + user-selected duration
-  gracePeriodEnd  DateTime  // expectedBackAt + 30 minutes
-  checkedInAt     DateTime?
-  lastLatitude    Float?    // last known location BEFORE entering dead zone
-  lastLongitude   Float?
-  lastAccuracy    Float?
-  alertedAt       DateTime?
+  id                     String    @id @default(uuid())
+  userId                 String
+  user                   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status                 String    // "PENDING" | "CHECKED_IN" | "MISSED" | "ALERTED"
+  mode                   String    @default("PLAIN") // "PLAIN" | "SAFE_WALK" | "HEARTBEAT"
+  destination            String?   
+  intervalMinutes        Int?      
+  locationShareSessionId String?   
+  startedAt              DateTime  @default(now())
+  expectedBackAt         DateTime  // startedAt + user-selected duration
+  gracePeriodEnd         DateTime  // expectedBackAt + 30 minutes
+  checkedInAt            DateTime?
+  lastLatitude           Float?    // last known location BEFORE entering dead zone
+  lastLongitude          Float?
+  lastAccuracy           Float?
+  alertedAt              DateTime?
 }
 
 model LocationShareSession {
@@ -123,5 +132,21 @@ model LocationShareHistory {
   longitude  Float
   accuracy   Float?
   timestamp  DateTime
+}
+
+model SafetyReport {
+  id            String    @id @default(uuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userPhone     String
+  category      String    // "HARASSMENT" | "POOR_LIGHTING" | "THEFT" | "UNSAFE_ROAD" | "OTHER"
+  description   String
+  latitude      Float
+  longitude     Float
+  createdAt     DateTime  @default(now())
+  status        String    @default("ACTIVE") // "ACTIVE" | "UNDER_REVIEW" | "REMOVED_BY_ADMIN"
+  isPublicSpace Boolean   @default(false)
+  disputedBy    String?
+  disputedAt    DateTime?
 }
 
