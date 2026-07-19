@@ -262,4 +262,76 @@ export async function sendDeadZoneAlertPush(
   }
 }
 
+export async function sendLocationShareStartPush(
+  fcmToken: string,
+  sharerName: string,
+  sharerPhone: string,
+  shareUrl: string,
+  sessionId: string,
+  durationMinutes: number
+): Promise<boolean> {
+  console.log('[FCM_LOC_SHARE] entering sendLocationShareStartPush for token:', fcmToken?.substring(0, 20) + '...');
 
+  if (!isFcmInitialized) {
+    console.warn('[FCM_LOC_SHARE] Firebase Admin not initialized, skipping push');
+    return false;
+  }
+
+  try {
+    const message = {
+      token: fcmToken,
+      notification: {
+        title: `📍 ${sharerName} is sharing their location with you`,
+        body: `Real-time location sharing active for ${durationMinutes} min. Tap to view.`
+      },
+      data: {
+        type: 'LOCATION_SHARE_STARTED',
+        sessionId,
+        sharerName,
+        sharerPhone,
+        shareUrl,
+        durationMinutes: durationMinutes.toString()
+      },
+      android: {
+        priority: 'high' as const,
+        notification: {
+          channelId: 'aryaa_location_share',
+          color: '#3B82F6',
+          defaultSound: true,
+          defaultVibrateTimings: true
+        }
+      }
+    };
+
+    const response = await getMessaging().send(message);
+    console.log('[FCM_LOC_SHARE] send success, messageId:', response);
+    return true;
+  } catch (error: any) {
+    console.error('[FCM_LOC_SHARE] send failed:', error.message, error.code);
+    return false;
+  }
+}
+
+export async function sendLocationShareStopPush(
+  fcmToken: string,
+  sharerName: string,
+  sessionId: string
+): Promise<boolean> {
+  if (!isFcmInitialized) return false;
+  try {
+    const message = {
+      token: fcmToken,
+      data: {
+        type: 'LOCATION_SHARE_STOPPED',
+        sessionId,
+        sharerName
+      },
+      android: { priority: 'high' as const }
+    };
+    await getMessaging().send(message);
+    return true;
+  } catch (error: any) {
+    console.error('[FCM_LOC_SHARE_STOP] send failed:', error.message, error.code);
+    return false;
+  }
+}

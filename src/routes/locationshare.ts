@@ -4,6 +4,7 @@ import { z } from 'zod';
 import crypto from 'crypto';
 import { prisma } from '../db/index.js';
 import { verifyToken } from '../utils/auth.js';
+import { sendLocationShareStartPush, sendLocationShareStopPush } from '../utils/fcm.js';
 
 // Authenticate hook
 async function authenticate(request: FastifyRequest, reply: FastifyReply) {
@@ -82,6 +83,29 @@ export async function locationShareRoutes(fastify: FastifyInstance) {
     });
 
     const shareUrl = `https://aryaa.app/track/${session.id}?token=${shareToken}`;
+
+    // Async: look up each contact's app user by phone and send FCM push
+    const sharerUser = await prisma.user.findUnique({ where: { id: userId }, select: { name: true, phone: true } });
+    const sharerName = sharerUser?.name ?? 'A contact';
+    const sharerPhone = sharerUser?.phone ?? '';
+
+    Promise.allSettled(
+      contacts.map(async (contact) => {
+        const recipientUser = await prisma.user.findFirst({
+          where: { phone: { equals: contact.phone, mode: 'insensitive' } }
+        });
+        if (recipientUser?.fcmToken) {
+          await sendLocationShareStartPush(
+            recipientUser.fcmToken,
+            sharerName,
+            sharerPhone,
+            shareUrl,
+            session.id,
+            durationMinutes
+          );
+        }
+      })
+    ).catch(err => console.error('[LOC_SHARE] FCM dispatch error:', err));
 
     return reply.status(200).send({
       sessionId: session.id,
@@ -180,6 +204,28 @@ export async function locationShareRoutes(fastify: FastifyInstance) {
       where: { id: sessionId },
       data: { active: false }
     });
+
+    // Async: notify contacts the share has ended
+    const sessionWithContacts = await prisma.locationShareSession.findUnique({
+      where: { id: sessionId },
+      include: {
+        contacts: { include: { contact: true } },
+        user: { select: { name: true } }
+      }
+    });
+    if (sessionWithContacts) {
+      const sharerName = sessionWithContacts.user.name ?? 'A contact';
+      Promise.allSettled(
+        sessionWithContacts.contacts.map(async (sc) => {
+          const recipientUser = await prisma.user.findFirst({
+            where: { phone: { equals: sc.contact.phone, mode: 'insensitive' } }
+          });
+          if (recipientUser?.fcmToken) {
+            await sendLocationShareStopPush(recipientUser.fcmToken, sharerName, sessionId);
+          }
+        })
+      ).catch(err => console.error('[LOC_SHARE_STOP] FCM dispatch error:', err));
+    }
 
     return reply.status(200).send({ success: true });
   });
