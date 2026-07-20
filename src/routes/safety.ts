@@ -110,6 +110,42 @@ export async function safetyRoutes(fastify: FastifyInstance) {
     return reply.status(201).send(report);
   });
 
+  // 1b. GET /api/safety-reports/me — Get user's own reports (authenticated)
+  server.get('/safety-reports/me', {
+    preHandler: authenticate
+  }, async (request, reply) => {
+    const userId = (request as any).userId;
+    const reports = await prisma.safetyReport.findMany({
+      where: {
+        userId,
+        status: { in: ['ACTIVE', 'UNDER_REVIEW'] }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+    return reply.status(200).send(reports);
+  });
+
+  // 1c. DELETE /api/safety-reports/:id — Delete user's own report (authenticated)
+  server.delete('/safety-reports/:id', {
+    preHandler: authenticate
+  }, async (request, reply) => {
+    const userId = (request as any).userId;
+    const { id } = request.params as { id: string };
+
+    const report = await prisma.safetyReport.findUnique({ where: { id } });
+    if (!report) return reply.status(404).send({ error: 'Not Found', message: 'Safety report not found' });
+
+    if (report.userId !== userId) {
+      return reply.status(403).send({
+        error: 'Forbidden',
+        message: 'You can only remove reports you created.'
+      });
+    }
+
+    await prisma.safetyReport.delete({ where: { id } });
+    return reply.status(200).send({ success: true });
+  });
+
   // 2. GET /api/safety-map/pins — Public aggregated safety pins (unauthenticated)
   server.get('/safety-map/pins', async (_request, reply) => {
     const now = new Date();
