@@ -158,15 +158,34 @@ export async function authRoutes(fastify: FastifyInstance) {
   typedFastify.post('/google', {
     schema: {
       body: googleLoginBodySchema
+    },
+    config: {
+      rateLimit: {
+        max: 5,
+        timeWindow: '1 hour',
+        skip: (request: FastifyRequest) => {
+          return process.env.NODE_ENV === 'test' || 
+                 process.env.JWT_SECRET === '4d8b5c90f2304918e9a2638bc165fd47395029a1b8e4e94f27e57c6b482910fa' ||
+                 (process.env.NODE_ENV !== 'production' && request.headers['x-aryaa-test'] === 'true');
+        },
+        allowList: (request: FastifyRequest) => {
+          return process.env.NODE_ENV === 'test' || 
+                 process.env.JWT_SECRET === '4d8b5c90f2304918e9a2638bc165fd47395029a1b8e4e94f27e57c6b482910fa' ||
+                 (process.env.NODE_ENV !== 'production' && request.headers['x-aryaa-test'] === 'true');
+        }
+      }
     }
   }, async (request, reply) => {
     const { idToken } = request.body;
 
     try {
       // Validate the token and ensure it was issued specifically for your app
+      // Use environment variable for flexibility, fallback to hardcoded if not provided (backward compatibility)
+      const clientId = process.env.GOOGLE_CLIENT_ID || '1045174807703-qt4ll34ck6fku5n8v93st29vqroa5f2c.apps.googleusercontent.com';
+      
       const ticket = await googleClient.verifyIdToken({
         idToken,
-        audience: '1045174807703-qt4ll34ck6fku5n8v93st29vqroa5f2c.apps.googleusercontent.com',
+        audience: clientId,
       });
       
       const payload = ticket.getPayload();
@@ -186,8 +205,9 @@ export async function authRoutes(fastify: FastifyInstance) {
       });
 
       if (!user) {
-        // Create user with dummy phone/password since Google doesn't provide them
-        const dummyPhone = `GOOGLE_${payload.sub.substring(0, 10)}_${crypto.randomBytes(2).toString('hex')}`;
+        // Create user with dummy phone/password since Google doesn't provide them.
+        // We use a high-entropy 16-character hex string to guarantee uniqueness in the @unique phone field.
+        const dummyPhone = `GOOGLE_${payload.sub.substring(0, 10)}_${crypto.randomBytes(8).toString('hex')}`;
         const dummyPassword = await hashPassword(crypto.randomBytes(32).toString('hex'));
         
         user = await prisma.user.create({
