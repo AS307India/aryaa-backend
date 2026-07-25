@@ -1,8 +1,12 @@
 import { FastifyInstance, FastifyRequest } from 'fastify';
 import { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { prisma } from '../db/index.js';
-import { registerBodySchema, loginBodySchema } from '../schemas/auth.js';
+import { registerBodySchema, loginBodySchema, googleLoginBodySchema } from '../schemas/auth.js';
 import { hashPassword, comparePassword, signToken } from '../utils/auth.js';
+import { OAuth2Client } from 'google-auth-library';
+import crypto from 'crypto';
+
+const googleClient = new OAuth2Client();
 
 export async function authRoutes(fastify: FastifyInstance) {
   const typedFastify = fastify.withTypeProvider<ZodTypeProvider>();
@@ -148,5 +152,72 @@ export async function authRoutes(fastify: FastifyInstance) {
         createdAt: user.createdAt
       }
     });
+  });
+
+  // POST /api/auth/google
+  typedFastify.post('/google', {
+    schema: {
+      body: googleLoginBodySchema
+    }
+  }, async (request, reply) => {
+    const { idToken } = request.body;
+
+    try {
+      // Validate the token and ensure it was issued specifically for your app
+      const ticket = await googleClient.verifyIdToken({
+        idToken,
+        audience: '1045174807703-qt4ll34ck6fku5n8v93st29vqroa5f2c.apps.googleusercontent.com',
+      });
+      
+      const payload = ticket.getPayload();
+      if (!payload || !payload.email) {
+        return reply.status(401).send({
+          error: 'Unauthorized',
+          message: 'Invalid Google token or missing email'
+        });
+      }
+
+      const email = payload.email;
+      const name = payload.name || 'Google User';
+
+      // Find user
+      let user = await prisma.user.findUnique({
+        where: { email }
+      });
+
+      if (!user) {
+        // Create user with dummy phone/password since Google doesn't provide them
+        const dummyPhone = `GOOGLE_${payload.sub.substring(0, 10)}_${crypto.randomBytes(2).toString('hex')}`;
+        const dummyPassword = await hashPassword(crypto.randomBytes(32).toString('hex'));
+        
+        user = await prisma.user.create({
+          data: {
+            name,
+            email,
+            phone: dummyPhone,
+            password: dummyPassword
+          }
+        });
+      }
+
+      const token = signToken(user.id);
+
+      return reply.status(200).send({
+        token,
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          phone: user.phone,
+          createdAt: user.createdAt
+        }
+      });
+    } catch (error) {
+      request.log.error(error);
+      return reply.status(401).send({
+        error: 'Unauthorized',
+        message: 'Google token verification failed'
+      });
+    }
   });
 }

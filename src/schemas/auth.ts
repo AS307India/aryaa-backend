@@ -11,3 +11,7 @@ export const loginBodySchema = z.object({
   email: z.string().email("Invalid email format"),
   password: z.string().min(1, "Password is required")
 });
+
+export const googleLoginBodySchema = z.object({
+  idToken: z.string().min(1, "ID Token is required")
+});
